@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Employees - CCTV Activity Monitor</title>
+<style>
+  :root {
+    --bg: #f4f6f8; --card: #ffffff; --text: #1c2430; --muted: #6b7684;
+    --border: #e2e6eb; --green: #1f9d55; --orange: #e8890c; --blue: #2563eb; --red: #d64545;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #12161c; --card: #1b212a; --text: #e8ecf1; --muted: #9aa5b4; --border: #2a323d; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+         background: var(--bg); color: var(--text); }
+  header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap;
+           gap: 12px; padding: 16px 24px; background: var(--card); border-bottom: 1px solid var(--border); }
+  h1 { font-size: 20px; margin: 0; }
+  button, a.btn { font: inherit; font-size: 14px; padding: 8px 14px; border-radius: 8px;
+                  border: 1px solid var(--border); background: var(--card); color: var(--text);
+                  cursor: pointer; text-decoration: none; display: inline-block; }
+  button.primary { background: var(--blue); border-color: var(--blue); color: #fff; }
+  button.danger { color: var(--red); }
+  button:disabled { opacity: .5; cursor: not-allowed; }
+
+  main { max-width: 1200px; margin: 0 auto; padding: 24px; display: grid;
+         grid-template-columns: 1fr 1.3fr; gap: 20px; align-items: start; }
+  @media (max-width: 900px) { main { grid-template-columns: 1fr; } }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 16px; }
+  .card h2 { font-size: 14px; margin: 0 0 12px; color: var(--muted);
+             text-transform: uppercase; letter-spacing: .05em; }
+
+  label.f { display: block; font-size: 13px; color: var(--muted); margin: 12px 0 4px; }
+  input[type=text] { width: 100%; font: inherit; padding: 9px 10px; border-radius: 8px;
+                     border: 1px solid var(--border); background: var(--bg); color: var(--text); }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+  .hint { font-size: 13px; color: var(--muted); margin: 8px 0 0; line-height: 1.5; }
+
+  .thumbs { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+  .thumb { position: relative; width: 84px; height: 84px; border-radius: 8px; overflow: hidden;
+           border: 1px solid var(--border); }
+  .thumb img { width: 100%; height: 100%; object-fit: cover; }
+  .thumb button { position: absolute; top: 2px; right: 2px; padding: 0 6px; font-size: 14px;
+                  line-height: 20px; border-radius: 10px; background: rgba(0,0,0,.65);
+                  color: #fff; border: 0; }
+
+  .live { display: none; margin-top: 10px; background: #000; border-radius: 8px; overflow: hidden;
+          aspect-ratio: 4 / 3; }
+  .live.show { display: block; }
+  .live img { width: 100%; height: 100%; object-fit: contain; display: block; }
+
+  #msg { margin-top: 12px; font-size: 14px; white-space: pre-line; }
+  #msg.ok { color: var(--green); } #msg.err { color: var(--red); }
+
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th, td { text-align: left; padding: 10px 8px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+  th { color: var(--muted); font-weight: 600; font-size: 12px; text-transform: uppercase; }
+  .avatar { width: 40px; height: 40px; border-radius: 50%; object-fit: cover; background: var(--border); }
+  .empty { color: var(--muted); text-align: center; padding: 24px; }
+  .table-wrap { overflow-x: auto; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Employees</h1>
+  <a class="btn" href="/">&larr; Dashboard</a>
+</header>
+
+<main>
+  <section class="card">
+    <h2>Register employee</h2>
+
+    <label class="f" for="code">Employee ID</label>
+    <input type="text" id="code" placeholder="e.g. EMP001" maxlength="30">
+    <label class="f" for="name">Full name</label>
+    <input type="text" id="name" placeholder="e.g. Priya Sharma" maxlength="80">
+    <label class="f" for="dept">Department</label>
+    <input type="text" id="dept" placeholder="e.g. Accounts" maxlength="80">
+
+    <label class="f">Face photos</label>
+    <div class="row">
+      <button type="button" id="pick">Upload photos</button>
+      <button type="button" id="cam">Use live camera</button>
+      <button type="button" id="capture" class="primary" style="display:none">Capture</button>
+    </div>
+    <input type="file" id="file" accept="image/*" multiple style="display:none">
+
+    <div id="live" class="live"><img id="liveimg" alt="Live camera"></div>
+    <p class="hint">
+      Add 3&ndash;5 photos: facing the camera, slightly left, slightly right.
+      Good light, one person per photo, face clearly visible.
+      The live camera needs the monitor running on the Dashboard.
+    </p>
+
+    <div id="thumbs" class="thumbs"></div>
+
+    <div class="row" style="margin-top:16px">
+      <button type="button" id="save" class="primary">Register employee</button>
+    </div>
+    <div id="msg"></div>
+    <p class="hint">Face data is personal biometric data. Register only people who have agreed to it.</p>
+  </section>
+
+  <section class="card">
+    <h2>Registered employees</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th></th><th>ID</th><th>Name</th><th>Department</th><th>Photos</th><th></th></tr></thead>
+        <tbody id="rows"></tbody>
+      </table>
+      <div id="empty" class="empty" style="display:none">No employees registered yet.</div>
+    </div>
+  </section>
+</main>
+
+<script>
+const $ = id => document.getElementById(id);
+const MAX_PHOTOS = 8;
+let photos = [];   // { blob, url }
+
+function esc(t) { const d = document.createElement("div"); d.textContent = t ?? ""; return d.innerHTML; }
+
+function setMsg(text, cls) { $("msg").textContent = text; $("msg").className = cls || ""; }
+
+function addPhoto(blob) {
+  if (photos.length >= MAX_PHOTOS) { setMsg("Maximum " + MAX_PHOTOS + " photos.", "err"); return; }
+  photos.push({ blob, url: URL.createObjectURL(blob) });
+  renderThumbs();
+}
+
+function renderThumbs() {
+  $("thumbs").innerHTML = photos.map((p, i) =>
+    `<div class="thumb"><img src="${p.url}"><button type="button" data-i="${i}" title="Remove">&times;</button></div>`
+  ).join("");
+  $("thumbs").querySelectorAll("button").forEach(b => b.onclick = () => {
+    URL.revokeObjectURL(photos[b.dataset.i].url);
+    photos.splice(+b.dataset.i, 1);
+    renderThumbs();
+  });
+}
+
+// ---- photo sources
+$("pick").onclick = () => $("file").click();
+$("file").onchange = e => { [...e.target.files].forEach(addPhoto); e.target.value = ""; };
+
+$("cam").onclick = () => {
+  const show = !$("live").classList.contains("show");
+  $("live").classList.toggle("show", show);
+  $("capture").style.display = show ? "inline-block" : "none";
+  $("cam").textContent = show ? "Hide camera" : "Use live camera";
+  if (show) $("liveimg").src = "/video_feed"; else $("liveimg").removeAttribute("src");
+};
+
+$("capture").onclick = async () => {
+  const r = await fetch("/api/snapshot");
+  if (!r.ok) { const d = await r.json().catch(() => ({})); setMsg(d.error || "Could not capture.", "err"); return; }
+  setMsg("");
+  addPhoto(await r.blob());
+};
+
+// ---- save
+$("save").onclick = async () => {
+  const fd = new FormData();
+  fd.append("emp_code", $("code").value);
+  fd.append("name", $("name").value);
+  fd.append("department", $("dept").value);
+  photos.forEach((p, i) => fd.append("images", p.blob, `photo${i + 1}.jpg`));
+
+  $("save").disabled = true;
+  setMsg("Checking faces...");
+  try {
+    const r = await fetch("/api/employees", { method: "POST", body: fd });
+    const d = await r.json();
+    if (!r.ok) { setMsg(d.error || "Failed.", "err"); return; }
+    let text = `Registered with ${d.saved} photo(s).`;
+    if (d.problems.length) text += "\nSkipped:\n" + d.problems.join("\n");
+    setMsg(text, "ok");
+    $("code").value = $("name").value = $("dept").value = "";
+    photos = []; renderThumbs();
+    loadEmployees();
+  } catch (e) {
+    setMsg("Server error: " + e, "err");
+  } finally {
+    $("save").disabled = false;
+  }
+};
+
+// ---- list
+async function loadEmployees() {
+  const r = await fetch("/api/employees");
+  const list = await r.json();
+  $("empty").style.display = list.length ? "none" : "block";
+  $("rows").innerHTML = list.map(e => `
+    <tr>
+      <td><img class="avatar" src="/api/employees/${e.id}/photo" alt=""></td>
+      <td><b>${esc(e.emp_code)}</b></td>
+      <td>${esc(e.name)}</td>
+      <td>${esc(e.department)}</td>
+      <td>${e.photos}</td>
+      <td><button class="danger" data-id="${e.id}">Delete</button></td>
+    </tr>`).join("");
+  $("rows").querySelectorAll("button").forEach(b => b.onclick = async () => {
+    const emp = list.find(x => x.id == b.dataset.id);
+    if (!confirm("Delete " + (emp ? emp.name : "this employee") + " and their face data?")) return;
+    await fetch("/api/employees/" + b.dataset.id, { method: "DELETE" });
+    loadEmployees();
+  });
+}
+loadEmployees();
+</script>
+</body>
+</html>

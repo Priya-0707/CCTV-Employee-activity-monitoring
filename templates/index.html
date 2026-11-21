@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CCTV Activity Monitor</title>
+<style>
+  :root {
+    --bg: #f4f6f8; --card: #ffffff; --text: #1c2430; --muted: #6b7684;
+    --border: #e2e6eb; --green: #1f9d55; --orange: #e8890c; --grey: #8a94a3;
+    --blue: #2563eb; --red: #d64545;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #12161c; --card: #1b212a; --text: #e8ecf1; --muted: #9aa5b4;
+      --border: #2a323d;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+         background: var(--bg); color: var(--text); }
+  header { display: flex; align-items: center; justify-content: space-between;
+           flex-wrap: wrap; gap: 12px; padding: 16px 24px;
+           background: var(--card); border-bottom: 1px solid var(--border); }
+  h1 { font-size: 20px; margin: 0; }
+  .pill { display: inline-block; padding: 3px 10px; border-radius: 999px;
+          font-size: 12px; font-weight: 600; color: #fff; background: var(--grey); }
+  .pill.running { background: var(--green); }
+  .pill.error { background: var(--red); }
+  .pill.starting { background: var(--orange); }
+  .actions { display: flex; gap: 8px; flex-wrap: wrap; }
+  button, a.btn { font: inherit; font-size: 14px; padding: 8px 14px; border-radius: 8px;
+                  border: 1px solid var(--border); background: var(--card); color: var(--text);
+                  cursor: pointer; text-decoration: none; }
+  button.primary { background: var(--blue); border-color: var(--blue); color: #fff; }
+  button:hover, a.btn:hover { filter: brightness(0.95); }
+
+  main { max-width: 1200px; margin: 0 auto; padding: 24px; display: grid;
+         grid-template-columns: 2fr 1fr; gap: 20px; }
+  @media (max-width: 900px) { main { grid-template-columns: 1fr; } }
+  .card { background: var(--card); border: 1px solid var(--border);
+          border-radius: 12px; padding: 16px; }
+  .card h2 { font-size: 14px; margin: 0 0 12px; color: var(--muted);
+             text-transform: uppercase; letter-spacing: .05em; }
+
+  .video { position: relative; background: #000; border-radius: 8px; overflow: hidden;
+           aspect-ratio: 16 / 9; }
+  .video img { width: 100%; height: 100%; object-fit: contain; display: block; }
+  .video .msg { position: absolute; inset: 0; display: none; align-items: center;
+                justify-content: center; color: #cfd6df; font-size: 15px;
+                text-align: center; padding: 20px; background: #000; }
+  .video.off .msg { display: flex; }
+
+  .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  .stat { text-align: center; padding: 12px 6px; border-radius: 10px;
+          border: 1px solid var(--border); }
+  .stat b { display: block; font-size: 28px; }
+  .stat span { font-size: 12px; color: var(--muted); }
+  .stat.active b { color: var(--green); }
+  .stat.idle b { color: var(--orange); }
+
+  .setting { margin-bottom: 14px; }
+  .setting label { display: flex; justify-content: space-between; font-size: 14px; }
+  .setting small { color: var(--muted); }
+  input[type=range] { width: 100%; }
+
+  .full { grid-column: 1 / -1; }
+  .table-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th, td { text-align: left; padding: 10px 8px; border-bottom: 1px solid var(--border); }
+  th { color: var(--muted); font-weight: 600; font-size: 12px; text-transform: uppercase; }
+  .badge { padding: 2px 8px; border-radius: 6px; font-size: 12px; font-weight: 600; color: #fff; }
+  .badge.ACTIVE { background: var(--green); }
+  .badge.IDLE { background: var(--orange); }
+  .badge.AWAY { background: var(--grey); }
+  .bar { width: 110px; height: 8px; background: var(--border); border-radius: 4px;
+         overflow: hidden; display: inline-block; vertical-align: middle; margin-right: 6px; }
+  .bar i { display: block; height: 100%; background: var(--green); }
+  .empty { color: var(--muted); text-align: center; padding: 24px; }
+  .error { color: var(--red); font-size: 13px; margin-top: 8px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>CCTV Activity Monitor <span id="status" class="pill">connecting</span></h1>
+  </div>
+  <div class="actions">
+    <a class="btn" href="/employees">Employees</a>
+    <button id="toggle" class="primary">Start</button>
+    <button id="reset">Reset times</button>
+    <a class="btn" href="/api/report.csv">Download CSV</a>
+  </div>
+</header>
+
+<main>
+  <section class="card">
+    <h2>Live feed</h2>
+    <div id="video" class="video off">
+      <img id="feed" alt="Live camera feed">
+      <div id="msg" class="msg">Camera is not running</div>
+    </div>
+    <div id="error" class="error"></div>
+  </section>
+
+  <aside style="display:grid; gap:20px; align-content:start;">
+    <section class="card">
+      <h2>Right now</h2>
+      <div class="stats">
+        <div class="stat"><b id="s-cam">0</b><span>On camera</span></div>
+        <div class="stat active"><b id="s-active">0</b><span>Active</span></div>
+        <div class="stat idle"><b id="s-idle">0</b><span>Idle</span></div>
+      </div>
+      <p id="unknown" style="margin:10px 0 0;font-size:13px;color:var(--muted)"></p>
+    </section>
+
+    <section class="card">
+      <h2>Sensitivity</h2>
+      <div class="setting">
+        <label>Motion threshold <span id="v-motion"></span></label>
+        <input type="range" id="motion" min="0.002" max="0.08" step="0.002">
+        <small>Lower = even tiny movements count as active</small>
+      </div>
+      <div class="setting">
+        <label>Idle after (sec) <span id="v-idle"></span></label>
+        <input type="range" id="idle" min="2" max="60" step="1">
+        <small>No movement for this long = idle</small>
+      </div>
+      <div class="setting">
+        <label>Detection confidence <span id="v-conf"></span></label>
+        <input type="range" id="conf" min="0.2" max="0.9" step="0.05">
+      </div>
+      <div class="setting">
+        <label>Face match strictness <span id="v-match"></span></label>
+        <input type="range" id="match" min="0.2" max="0.7" step="0.01">
+        <small>Higher = stricter (fewer wrong matches, but may miss you)</small>
+      </div>
+    </section>
+  </aside>
+
+  <section class="card full">
+    <h2>Working time per person</h2>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>Employee</th><th>Department</th><th>Status</th><th>Time on camera</th>
+              <th>Active</th><th>Idle</th><th>Activeness</th></tr>
+        </thead>
+        <tbody id="rows"></tbody>
+      </table>
+      <div id="empty" class="empty">No registered employee recognised yet.</div>
+    </div>
+  </section>
+</main>
+
+<script>
+const $ = id => document.getElementById(id);
+let running = false;
+let settingsLoaded = false;
+
+function esc(t) { const d = document.createElement("div"); d.textContent = t ?? ""; return d.innerHTML; }
+
+function fmt(sec) {
+  sec = Math.floor(sec);
+  const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), s = sec % 60;
+  return [h, m, s].map(n => String(n).padStart(2, "0")).join(":");
+}
+
+function post(url, body) {
+  return fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body || {}),
+  });
+}
+
+function render(d) {
+  // status pill + video
+  const st = d.status;
+  $("status").textContent = st;
+  $("status").className = "pill " + st;
+  running = (st === "running" || st === "starting");
+  $("toggle").textContent = running ? "Stop" : "Start";
+
+  const live = st === "running";
+  $("video").classList.toggle("off", !live);
+  $("msg").textContent = st === "finished" ? "Video finished" :
+                         st === "starting" ? "Loading model & camera..." :
+                         "Camera is not running";
+  if (live && !$("feed").src.includes("/video_feed")) $("feed").src = "/video_feed";
+  if (!live) $("feed").removeAttribute("src");
+  $("error").textContent = d.error ? "Error: " + d.error : "";
+
+  // summary cards
+  $("s-cam").textContent = d.summary.on_camera;
+  $("s-active").textContent = d.summary.active;
+  $("s-idle").textContent = d.summary.idle;
+  $("unknown").textContent = d.summary.unknown
+    ? d.summary.unknown + " unregistered person(s) in view (not recorded)" : "";
+
+  // settings sliders (set once so we don't fight the user's dragging)
+  if (!settingsLoaded) {
+    $("motion").value = d.settings.motion_threshold;
+    $("idle").value = d.settings.idle_after;
+    $("conf").value = d.settings.confidence;
+    $("match").value = d.settings.match_threshold;
+    updateLabels();
+    settingsLoaded = true;
+  }
+
+  // table
+  $("empty").style.display = d.people.length ? "none" : "block";
+  $("rows").innerHTML = d.people.map(p => `
+    <tr>
+      <td><b>${esc(p.name)}</b><br><small style="color:var(--muted)">${esc(p.emp_code)}</small></td>
+      <td>${esc(p.department)}</td>
+      <td><span class="badge ${p.state}">${p.state}</span></td>
+      <td>${fmt(p.present)}</td>
+      <td>${fmt(p.active)}</td>
+      <td>${fmt(p.idle)}</td>
+      <td><span class="bar"><i style="width:${p.active_pct}%"></i></span>${p.active_pct}%</td>
+    </tr>`).join("");
+}
+
+function updateLabels() {
+  $("v-motion").textContent = $("motion").value;
+  $("v-idle").textContent = $("idle").value + "s";
+  $("v-conf").textContent = $("conf").value;
+  $("v-match").textContent = $("match").value;
+}
+
+async function refresh() {
+  try {
+    const r = await fetch("/api/stats");
+    render(await r.json());
+  } catch (e) {
+    $("status").textContent = "server offline";
+    $("status").className = "pill error";
+  }
+}
+
+// controls
+$("toggle").onclick = async () => { await post(running ? "/api/stop" : "/api/start"); refresh(); };
+$("reset").onclick  = async () => { await post("/api/reset"); refresh(); };
+
+for (const id of ["motion", "idle", "conf", "match"]) {
+  $(id).oninput = updateLabels;
+  $(id).onchange = () => post("/api/settings", {
+    motion_threshold: $("motion").value,
+    idle_after: $("idle").value,
+    confidence: $("conf").value,
+    match_threshold: $("match").value,
+  });
+}
+
+setInterval(refresh, 1000);
+refresh();
+</script>
+</body>
+</html>
